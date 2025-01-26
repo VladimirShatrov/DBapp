@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Operations</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .output {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<h1>Database Operations</h1>
+
+<!-- Кнопки для выполнения операций -->
+<button onclick="fetchAllData()">1. Fetch All Data</button>
+<button onclick="insertData()">2. Insert Data</button>
+<button onclick="updateData()">3. Update Data</button>
+<button onclick="deleteData()">4. Delete Data</button>
+<button onclick="runTransaction()">5. Run Transaction</button>
+<button onclick="errorUpdateFIO()">6. Update Author with Error</button>
+
+<!-- Вывод данных -->
+<div class="output" id="output"></div>
+
+<script>
+    const API_BASE = "http://localhost:8080"; // Замените на ваш адрес сервера
+
+    async function errorUpdateFIO() {
+        try {
+            // Получаем список всех авторов
+            const authors = await fetch(`${API_BASE}/author/all`).then(res => res.json());
+
+            if (authors.length === 0) {
+                alert("No authors found, cannot update.");
+                return;
+            }
+
+            // Используем первого автора из списка
+            const authorId = authors[0].id;
+
+            // Выполняем запрос на обновление автора с ошибочным ФИО
+            const response = await fetch(`${API_BASE}/author/updateWithErrorFIO/${authorId}`, {
+                method: "POST",
+            });
+
+            // Если произошла ошибка на сервере, отображаем сообщение через alert
+            if (response.status === 500) {
+                const errorMessage = await response.text();
+                alert("Error: " + errorMessage);
+            } else {
+                const result = await response.json();
+                alert("Author updated successfully!");
+            }
+        } catch (error) {
+            alert("Request failed: " + error.message);
+        }
+    }
+
+
+    // Функция для выполнения GET-запроса
+    async function fetchAllData() {
+        try {
+            const authors = await fetch(`${API_BASE}/author/all`).then(res => res.json());
+            const books = await fetch(`${API_BASE}/book/all`).then(res => res.json());
+            const libraries = await fetch(`${API_BASE}/library/all`).then(res => res.json());
+            const booksInLibraries = await fetch(`${API_BASE}/bookInLibrary/all`).then(res => res.json());
+
+            displayOutput({ authors, books, libraries, booksInLibraries });
+        } catch (error) {
+            displayError(error);
+        }
+    }
+
+    // Функция для вставки данных
+    async function insertData() {
+        try {
+            const newAuthor = await fetch(`${API_BASE}/author/create`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fio: "New Author", age: 30 })
+            }).then(res => res.json());
+            authorId = newAuthor.id;
+            const newBook = await fetch(`${API_BASE}/book/create`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: "New Book",
+                    publicationDate: new Date().toISOString().split("T")[0],
+                    author: { id: authorId },
+                    pages: 200,
+                    description: "A new book description",
+                    circulation: 1000,
+                    price: 10.5,
+                    rating: 0.1
+                })
+            }).then(res => res.json());
+            const newLibrary = await fetch(`${API_BASE}/library/create`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    open: "08:00:00",
+                    close: "18:00:00"
+                })
+            }).then(res => res.json());
+            await fetch(`${API_BASE}/bookInLibrary/create`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: {
+                        bookId: newBook.id,
+                        libraryId: newLibrary.id
+                    },
+                    available: true
+                })
+            });
+
+            fetchAllData();
+        } catch (error) {
+            displayError(error);
+        }
+    }
+
+    // Функция для обновления данных
+    async function updateData() {
+        try {
+            await fetch(`${API_BASE}/author/updateWhereAgeBetween/20/40`, { method: "POST" });
+            await fetch(`${API_BASE}/book/updateWherePublicationDateAfter/2000-01-01`, { method: "POST" });
+            await fetch(`${API_BASE}/library/updateWhereCloseBefore/20:00:00`, { method: "POST" });
+            await fetch(`${API_BASE}/bookInLibrary/updateWhereIsAvailable/true`, { method: "POST" });
+            fetchAllData();
+        } catch (error) {
+            displayError(error);
+        }
+    }
+
+    // Функция для удаления данных
+    async function deleteData() {
+        try {
+            await fetch(`${API_BASE}/bookInLibrary/deleteWhereIsAvailable/false`, { method: "DELETE" });
+            await fetch(`${API_BASE}/book/deleteWherePublicationDateAfter/2000-01-01`, { method: "DELETE" });
+            await fetch(`${API_BASE}/library/deleteWhereCloseBefore/20:00:00`, { method: "DELETE" });
+            await fetch(`${API_BASE}/author/deleteWhereAgeBetween/20/40`, { method: "DELETE" });
+
+            fetchAllData();
+        } catch (error) {
+            displayError(error);
+        }
+    }
+
+    // Функция для выполнения транзакции
+    async function runTransaction() {
+        try {
+            const response = await fetch(`${API_BASE}/run-transaction-demo/FIO`);
+            const message = await response.text();
+
+            displayOutput({ transactionResult: message });
+            fetchAllData();
+
+            const response1 = await fetch(`${API_BASE}/run-transaction-demo/OIF`);
+            const message1 = await response1.text();
+
+            displayOutput({ transactionResult: message1 });
+            fetchAllData();
+
+            const response2 = await fetch(`${API_BASE}/run-transaction-demo/taa`);
+            const message2 = await response2.text();
+
+            displayOutput({ transactionResult: message2 });
+            fetchAllData();
+        } catch (error) {
+            displayError(error);
+        }
+    }
+
+    // Вывод данных
+    function displayOutput(data) {
+        const output = document.getElementById("output");
+        output.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    }
+
+    // Вывод ошибок
+    function displayError(error) {
+        const output = document.getElementById("output");
+        output.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
+    }
+
+
+</script>
+</body>
+</html>
