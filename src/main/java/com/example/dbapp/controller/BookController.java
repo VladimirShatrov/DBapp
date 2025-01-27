@@ -1,6 +1,8 @@
 package com.example.dbapp.controller;
 
+import com.example.dbapp.model.Author;
 import com.example.dbapp.model.Book;
+import com.example.dbapp.service.AuthorService;
 import com.example.dbapp.service.BookService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,18 +11,18 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 @RestController
 @RequestMapping("/book")
 public class BookController {
     private final BookService service;
 
-    public BookController(BookService service) {
+    private final AuthorService authorService;
+
+    public BookController(BookService service, AuthorService authorService) {
         this.service = service;
+        this.authorService = authorService;
     }
 
     @GetMapping("/{id}")
@@ -75,6 +77,17 @@ public class BookController {
                 b.setPublicationDate(b.getPublicationDate().plusDays(2));
                 b.setPrice(b.getPrice().add(BigDecimal.valueOf(2)));
                 b.setRating(b.getRating() + 1);
+                List<Author> authors = authorService.getAll();
+                if (authors.size() > 1) {
+                    for (Author a: authors
+                         ) {
+                        if (!Objects.equals(a.getId(), b.getAuthor().getId())) {
+                            b.setAuthor(a);
+                            break;
+                        }
+                    };
+                }
+
                 updatedBooks.add(service.save(b));
             }
 
